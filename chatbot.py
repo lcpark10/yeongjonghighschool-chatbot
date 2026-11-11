@@ -3,8 +3,9 @@ import streamlit as st
 import pandas as pd
 from groq import Groq
 from dotenv import load_dotenv
+from datetime import datetime, timezone, timedelta # 날짜 모듈 추가
 
-# 1. .env 파일 로드
+
 load_dotenv()
 
 # 2. 페이지 설정
@@ -14,7 +15,7 @@ st.set_page_config(
     layout="centered"
 )
 
-# 3. 사이드바 디자인
+#사이드바 디자인
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/chatbot.png", width=80) 
     st.title("영종고 챗봇")
@@ -29,14 +30,14 @@ with st.sidebar:
     st.markdown("---")
     st.caption("Powered by Groq API & Streamlit")
 
-# 4. 메인 화면
+ #메인 화면
 st.title("🏫 영종고 챗봇")
 st.info("안녕하세요! 궁금한 학교 정보를 무엇이든 물어보세요. 똑똑하게 답변해 드립니다. 😊")
 
-# API 키 읽어오기 (.env 파일 또는 Streamlit Secrets)
+ #API 키 읽어오기
 GROQ_API_KEY = os.getenv("GROQ_API_KEY") or st.secrets.get("GROQ_API_KEY", "")
 
-# 5. CSV 데이터 로드 (인코딩 문제 완벽 대비)
+#CSV 데이터 로드 
 @st.cache_data
 def load_school_data():
     file_path = "school_data.csv"
@@ -58,9 +59,21 @@ if data_text is None:
     st.warning("⚠️ `school_data.csv` 파일을 읽을 수 없거나 파일이 없습니다. 기본 지식으로 대화를 진행합니다.")
     data_text = "별도의 제공된 학교 데이터가 없습니다."
 
-# 시스템 프롬프트 설정
+# --- [수정된 부분] 현재 날짜 계산 (한국 표준시 기준) ---
+KST = timezone(timedelta(hours=9))
+now = datetime.now(KST)
+weekdays = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
+today_str = f"{now.year}년 {now.month}월 {now.day}일 {weekdays[now.weekday()]}"
+
+# --- [수정된 부분] 시스템 프롬프트 고도화 ---
 system_instruction = f"""너는 영종고등학교 담당 AI 챗봇이야. 
-질문에 대해 아래 [데이터]를 바탕으로 친절하고 정확하게 한국어로 답변해줘. 데이터에 맞지 않은 잘못된 정보는 얘기하지마.
+오늘 날짜는 {today_str}입니다.
+
+[답변 지침]
+1. 아래 [데이터]를 바탕으로 친절하고 정확하게 한국어로 답변해줘. 데이터에 없는 허구의 정보는 절대 말하지 마.
+2. 사용자가 특정 날짜 없이 "급식 뭐야?", "밥 뭐야?" 등으로 물어보면, 무조건 오늘 날짜({today_str})를 기준으로 오늘 급식을 찾아서 알려줘.
+3. 내일이나 특정 날짜를 물어보면 해당 날짜에 맞춰서 알려줘.
+4. 급식 정보가 없다면 "오늘은 급식 정보가 없습니다"라고 자연스럽게 안내해.
 
 [데이터]
 {data_text}"""
@@ -71,17 +84,17 @@ if "messages" not in st.session_state:
         {"role": "system", "content": system_instruction}
     ]
 
-# 6. 이전 대화 기록 화면 출력 (시스템 프롬프트 제외)
+# 이전 대화 기록 화면 출력 
 for message in st.session_state.messages:
     if message["role"] != "system":
         with st.chat_message(message["role"]):
             st.markdown(message["content"])
 
-# 7. Groq API 설정 및 답변 생성
+# Groq API 설정 및 답변 생성
 if GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_"):
     client = Groq(api_key=GROQ_API_KEY)
 
-    if prompt := st.chat_input("질문을 입력하세요 (예: 우리 학교 교가가 뭐야?)"):
+    if prompt := st.chat_input("질문을 입력하세요 (예: 오늘 학교 급식 뭐야?)"):
         # 사용자 입력 UI 출력 및 저장
         st.chat_message("user").markdown(prompt)
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -90,7 +103,6 @@ if GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_"):
         with st.chat_message("assistant"):
             with st.spinner("답변을 작성하는 중입니다... 💭"):
                 try:
-                    # 지정하신 openai/gpt-oss-120b 모델 호출
                     chat_completion = client.chat.completions.create(
                         messages=st.session_state.messages,
                         model="openai/gpt-oss-120b",
@@ -103,7 +115,6 @@ if GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_"):
                     st.session_state.messages.append({"role": "assistant", "content": response_text})
                     
                 except Exception as e:
-                    # 만약 지정 모델에 일시적 장애가 있을 때 대체 모델로 자동 시도하는 예외 처리
                     try:
                         chat_completion = client.chat.completions.create(
                             messages=st.session_state.messages,
