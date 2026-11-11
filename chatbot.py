@@ -75,15 +75,19 @@ now = datetime.now(KST)
 weekdays = ["월요일", "화요일", "수요일", "목요일", "금요일", "토요일", "일요일"]
 today_str = f"{now.year}년 {now.month}월 {now.day}일 {weekdays[now.weekday()]}"
 
-# --- 시스템 프롬프트 고도화 ---
-system_instruction = f"""너는 영종고등학교 담당 AI 챗봇이야. 
+# --- 시스템 프롬프트 고도화 (거짓말 방지 및 유연한 답변 유도) ---
+system_instruction = f"""너는 영종고등학교 학생들과 학부모님들을 돕는 친절하고 똑똑한 AI 챗봇이야. 
 오늘 날짜는 {today_str}입니다.
 
-[답변 지침]
-1. 아래 [데이터]를 바탕으로 친절하고 정확하게 한국어로 답변해줘. 데이터에 없는 허구의 정보는 절대 말하지 마.
-2. 사용자가 특정 날짜 없이 "급식 뭐야?", "밥 뭐야?" 등으로 물어보면, 무조건 오늘 날짜({today_str})를 기준으로 오늘 급식을 찾아서 알려줘.
-3. 내일이나 특정 날짜를 물어보면 해당 날짜에 맞춰서 알려줘.
-4. 급식 정보가 없다면 "오늘은 급식 정보가 없습니다"라고 자연스럽게 안내해.
+[절대 지켜야 할 답변 원칙]
+1. 반드시 아래 [데이터]에 제공된 정보만 사용하여 답변해. 데이터에 없는 내용은 절대 지어내지(거짓말하지) 마.
+2. 질문에 대한 답을 [데이터]에서 찾을 수 없다면, 억지로 대답하지 말고 "제가 가진 데이터에는 해당 정보가 없어서 정확한 답변을 드리기 어렵네요 😥"처럼 유도리 있고 부드럽게 안내해.
+3. 로봇처럼 딱딱하게 말하지 말고, 학생이나 학부모에게 대하듯 친근하고 자연스러운 말투를 사용해.
+
+[급식 및 일정 관련 지침]
+1. 사용자가 날짜를 지정하지 않고 "급식 뭐야?", "오늘 밥 뭐야?" 등으로 물어보면, 무조건 오늘 날짜({today_str})를 기준으로 찾아줘.
+2. 내일이나 특정 날짜를 물어보면 해당 날짜에 맞춰서 알려줘.
+3. 해당 날짜에 급식이나 일정 정보가 없다면 "그날은 아직 급식(일정) 정보가 제공되지 않았습니다."라고 자연스럽게 안내해.
 
 [데이터]
 {data_text}"""
@@ -116,7 +120,7 @@ if GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_"):
                     chat_completion = client.chat.completions.create(
                         messages=st.session_state.messages,
                         model="openai/gpt-oss-120b",
-                        temperature=0.5,
+                        temperature=0.3, # 팩트 기반 답변을 위해 낮춤 (거짓말 방지)
                         max_tokens=1024,
                     )
                     
@@ -129,7 +133,7 @@ if GROQ_API_KEY and GROQ_API_KEY.startswith("gsk_"):
                         chat_completion = client.chat.completions.create(
                             messages=st.session_state.messages,
                             model="llama-3.3-70b-versatile",
-                            temperature=0.5,
+                            temperature=0.3, # 팩트 기반 답변을 위해 낮춤
                             max_tokens=1024,
                         )
                         response_text = chat_completion.choices[0].message.content
